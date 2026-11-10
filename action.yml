@@ -35,15 +35,24 @@ runs:
   steps:
     - name: 'Install required tools'
       run: |
-        composer require --dev drupal/coder overtrue/phplint phpmd/phpmd phpstan/phpstan phpstan/extension-installer mglaman/phpstan-drupal phpstan/phpstan-deprecation-rules
+        # PHPLint 9.8.0 does not find files with --extensions and fails on --file-extensions (symfony/console 7.4).
+        composer require --dev drupal/coder "overtrue/phplint:<9.8" phpmd/phpmd phpstan/phpstan phpstan/extension-installer mglaman/phpstan-drupal phpstan/phpstan-deprecation-rules
       shell: bash
 
     - name: 'PHPLint'
       if: ${{ inputs.phplint == 'true' }}
       run: |
         ./vendor/bin/phplint --version
-        if [ -d ./web/modules/custom ]; then ./vendor/bin/phplint --no-cache --no-progress --extensions=php --extensions=module --extensions=inc --extensions=install --extensions=test --extensions=theme ./web/modules/custom/; fi
-        if [ -d ./web/themes/custom ]; then ./vendor/bin/phplint --no-cache --no-progress --extensions=php --extensions=module --extensions=inc --extensions=install --extensions=test --extensions=theme ./web/themes/custom/; fi
+        # PHPLint 9+ needs the explicit "lint" command and a repeated --extensions option,
+        # older versions have no "lint" command and only read a comma separated --extensions.
+        PHPLINT_MAJOR=$(./vendor/bin/phplint --version | grep -oE '[0-9]+\.[0-9]+' | head -n 1 | cut -d. -f1 || true)
+        if [ "${PHPLINT_MAJOR:-0}" -ge 9 ]; then
+          PHPLINT_ARGS='lint --extensions=php --extensions=module --extensions=inc --extensions=install --extensions=test --extensions=theme'
+        else
+          PHPLINT_ARGS='--extensions=php,module,inc,install,test,theme'
+        fi
+        if [ -d ./web/modules/custom ]; then ./vendor/bin/phplint $PHPLINT_ARGS --no-cache --no-progress ./web/modules/custom/; fi
+        if [ -d ./web/themes/custom ]; then ./vendor/bin/phplint $PHPLINT_ARGS --no-cache --no-progress ./web/themes/custom/; fi
       shell: bash
 
     - name: 'PHPMD'
